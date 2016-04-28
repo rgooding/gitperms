@@ -237,9 +237,10 @@ class GitPerms
       }
     }
 
-    echo date('d/m/Y H:i:s') . " Started " . $argv[1] . "\n";
+    $dryRunStr = $dryRun ? " (DRY RUN)" : "";
+    echo date('d/m/Y H:i:s') . " Started " . $mode . $dryRunStr . "\n";
     $this->processDir($rootDir, $mode == 'save', $dryRun);
-    echo date('d/m/Y H:i:s') . " Completed " . $argv[1] . "\n";
+    echo date('d/m/Y H:i:s') . " Completed " . $mode . $dryRunStr . "\n";
   }
 }
 
