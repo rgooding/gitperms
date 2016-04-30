@@ -28,6 +28,7 @@ class GitPerms
     echo "Usage: " . $this->_commandName . " save|restore [--dry-run] [directory]\n";
     echo "  save      : Save the permissions\n";
     echo "  restore   : Restore the permissions\n";
+    echo "  compare   : Compare the current permissions with what was last saved\n";
     echo "  directory : The root directory to start from\n";
     echo "              Defaults to the current working directory\n";
     echo "\n";
@@ -82,7 +83,7 @@ class GitPerms
     echo "Saved permissions for " . $dir . "\n";
   }
 
-  public function restoreDirPermissions($dir, $dryRun)
+  public function restoreDirPermissions($dir, $compareOnly)
   {
     $dir = rtrim($dir, '/');
     $permFile = $dir . '/' . PermsConfig::$permissionsFile;
@@ -128,50 +129,61 @@ class GitPerms
 
       $currentPerms = $this->getFilePermissions($fullPath);
 
-      $modifyMsg = [];
+      $changed = false;
       if($currentPerms['uid'] != $perms['uid'])
       {
-        $modifyMsg[] = 'Owner=' . $perms['uid'];
-        if(!$dryRun)
+        $changed = true;
+        if(!$compareOnly)
         {
           chown($fullPath, $perms['uid']);
         }
       }
       if($currentPerms['gid'] != $perms['gid'])
       {
-        $modifyMsg[] = 'Group=' . $perms['gid'];
-        if(!$dryRun)
+        $changed = true;
+        if(!$compareOnly)
         {
           chgrp($fullPath, $perms['gid']);
         }
       }
       if($currentPerms['mode'] != $perms['mode'])
       {
-        $modifyMsg[] = 'Mode=' . $perms['mode'];
-        if(!$dryRun)
+        $changed = true;
+        if(!$compareOnly)
         {
           chmod($fullPath, octdec($perms['mode']));
         }
       }
 
-      if(count($modifyMsg))
+      if($changed)
       {
-        echo "Restored " . $fullPath . " : " . implode(', ', $modifyMsg) . "\n";
+        $currentWord = $compareOnly ? "Current" : "Old";
+        $savedWord = $compareOnly ? "Saved" : "Restored";
+
+        echo $fullPath
+          . " : " . $currentWord . " " . $currentPerms['uid'] . ":"
+          . $currentPerms['gid'] . " " . $currentPerms['mode'] . ", "
+          . $savedWord . " " . $perms['uid'] . ":" . $perms['gid'] . " "
+          . $perms['mode'] . "\n";
       }
     }
   }
 
-  public function processDir($dir, $forSave = true, $dryRun = true)
+  public function processDir($dir, $mode, $dryRun = true)
   {
     $dir = rtrim($dir, '/');
 
-    if($forSave)
+    switch($mode)
     {
-      $this->saveDirPermissions($dir, $dryRun);
-    }
-    else
-    {
-      $this->restoreDirPermissions($dir, $dryRun);
+      case "save":
+        $this->saveDirPermissions($dir, $dryRun);
+        break;
+      case "restore":
+        $this->restoreDirPermissions($dir, $dryRun);
+        break;
+      case "compare":
+        $this->restoreDirPermissions($dir, true);
+        break;
     }
 
     $dh = opendir($dir);
@@ -187,7 +199,7 @@ class GitPerms
       $fullPath = $dir . '/' . $file;
       if(is_dir($fullPath) && (!in_array($file, $ignoreList)))
       {
-        $this->processDir($fullPath, $forSave, $dryRun);
+        $this->processDir($fullPath, $mode, $dryRun);
       }
     }
   }
@@ -209,6 +221,7 @@ class GitPerms
     {
       case "save":
       case "restore":
+      case "compare":
         $mode = $argv[1];
         break;
       default:
@@ -239,7 +252,7 @@ class GitPerms
 
     $dryRunStr = $dryRun ? " (DRY RUN)" : "";
     echo date('d/m/Y H:i:s') . " Started " . $mode . $dryRunStr . "\n";
-    $this->processDir($rootDir, $mode == 'save', $dryRun);
+    $this->processDir($rootDir, $mode, $dryRun);
     echo date('d/m/Y H:i:s') . " Completed " . $mode . $dryRunStr . "\n";
   }
 }
